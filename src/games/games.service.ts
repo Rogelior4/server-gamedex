@@ -31,18 +31,40 @@ export class GamesService {
   async getGameCover(title: string) {
     try {
       const response = await axios.get(
-        `https://store.steampowered.com/api/storesearch/?term=${title}&l=english&cc=US`,
+        `https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(title)}&l=english&cc=US`,
+        { timeout: 5000 },
       );
 
       if (response.data.items && response.data.items.length > 0) {
-        const appId = response.data.items[0].id;
+        // Check top 3 items for existing library art
+        for (const item of response.data.items.slice(0, 3)) {
+          const appId = item.id;
+          const modernUrl = `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/library_600x900.jpg`;
+          try {
+            const check = await axios.head(modernUrl, { timeout: 3000 });
+            if (check.status === 200) {
+              return { url: modernUrl };
+            }
+          } catch {
+            // Try legacy CDN or header as backup
+            const legacyUrl = `https://steamcdn-a.akamaihd.net/steam/apps/${appId}/library_600x900.jpg`;
+            try {
+              const checkLegacy = await axios.head(legacyUrl, { timeout: 3000 });
+              if (checkLegacy.status === 200) {
+                return { url: legacyUrl };
+              }
+            } catch {}
+          }
+        }
+
+        // Fallback to top item header
+        const topId = response.data.items[0].id;
         return {
-          url: `https://steamcdn-a.akamaihd.net/steam/apps/${appId}/library_600x900.jpg`,
+          url: `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${topId}/header.jpg`,
         };
       }
       return { url: null };
     } catch (error) {
-      console.error('Error buscando portada para ' + title, error.message);
       return { url: null };
     }
   }
