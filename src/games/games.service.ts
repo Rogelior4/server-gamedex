@@ -2,18 +2,21 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateGameDto } from './dto/create-game.dto';
 import { UpdateGameDto } from './dto/update-game.dto';
 import { PrismaService } from '../prisma/prisma.service';
-import axios from 'axios';
+import { MetadataAggregatorService, GameSearchResult } from './providers';
 
 @Injectable()
 export class GamesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly metadataAggregator: MetadataAggregatorService,
+  ) { }
 
   async create(createGameDto: CreateGameDto) {
     let coverUrl = createGameDto.coverUrl;
 
-    // Si no se proporcionó una URL manual, la buscamos automáticamente en Steam
+    // Si no se proporcionó una URL manual, la buscamos automáticamente con el agregador multi-tienda
     if (!coverUrl) {
-      const cover = await this.getGameCover(createGameDto.title);
+      const cover = await this.getGameCover(createGameDto.title, createGameDto.platform);
       coverUrl = cover.url ?? undefined;
     }
 
@@ -41,87 +44,35 @@ export class GamesService {
     return game;
   }
 
-  async getGameCover(title: string) {
-    try {
-      const response = await axios.get(
-        `https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(title)}&l=english&cc=US`,
-        { timeout: 5000 },
-      );
-
-      if (response.data.items && response.data.items.length > 0) {
-        // Check top 3 items for existing library art
-        for (const item of response.data.items.slice(0, 3)) {
-          const appId = item.id;
-          const modernUrl = `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/library_600x900.jpg`;
-          try {
-            const check = await axios.head(modernUrl, { timeout: 3000 });
-            if (check.status === 200) {
-              return { url: modernUrl };
-            }
-          } catch {
-            // Try legacy CDN or header as backup
-            const legacyUrl = `https://steamcdn-a.akamaihd.net/steam/apps/${appId}/library_600x900.jpg`;
-            try {
-              const checkLegacy = await axios.head(legacyUrl, { timeout: 3000 });
-              if (checkLegacy.status === 200) {
-                return { url: legacyUrl };
-              }
-            } catch {}
-          }
-        }
-
-        // Fallback to top item header
-        const topId = response.data.items[0].id;
-        return {
-          url: `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${topId}/header.jpg`,
-        };
-      }
-      return { url: null };
-    } catch (error) {
-      return { url: null };
-    }
+  /**
+   * Búsqueda multi-tienda compatible con Steam, Epic Games, Nintendo, Riot, Battle.net, EA, Ubisoft, Xbox, PlayStation, etc.
+   */
+  async search(query: string, platform?: string): Promise<GameSearchResult[]> {
+    return this.metadataAggregator.search(query, platform);
   }
 
+  /**
+   * Endpoint retrocompatible para clientes que usan /search-steam específicamente
+   */
   async searchSteam(query: string) {
-    if (!query || query.trim().length === 0) {
-      return [];
-    }
+    return this.metadataAggregator.search(query, 'steam');
+  }
 
-    try {
-      const response = await axios.get(
-        `https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(query.trim())}&l=english&cc=US`,
-        { timeout: 5000 },
-      );
-
-      if (!response.data.items || !Array.isArray(response.data.items)) {
-        return [];
-      }
-
-      return response.data.items.slice(0, 8).map((item: any) => {
-        const appId = item.id;
-        const libraryCoverUrl = `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/library_600x900.jpg`;
-        const headerUrl = `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`;
-        return {
-          id: appId,
-          title: item.name,
-          coverUrl: libraryCoverUrl,
-          headerUrl: headerUrl,
-          tinyImage: item.tiny_image || headerUrl,
-          platforms: item.platforms || {},
-        };
-      });
-    } catch (error) {
-      return [];
-    }
+  /**
+   * Obtiene la mejor carátula disponible usando cascada de proveedores según la plataforma
+   */
+  async getGameCover(title: string, platform?: string) {
+    return this.metadataAggregator.getBestCover(title, platform);
   }
 
   async update(id: number, updateGameDto: UpdateGameDto) {
     const existing = await this.findOne(id);
     let coverUrl: string | null | undefined = updateGameDto.coverUrl;
 
-    // Si el título cambió y no se pasó una portada específica, re-buscamos la carátula
+    // Si el título cambió y no se pasó una portada específica, re-buscamos la carátula según plataforma
     if (updateGameDto.title && updateGameDto.title !== existing.title && coverUrl === undefined) {
-      const cover = await this.getGameCover(updateGameDto.title);
+      const targetPlatform = updateGameDto.platform || existing.platform;
+      const cover = await this.getGameCover(updateGameDto.title, targetPlatform);
       coverUrl = cover.url ?? null;
     }
 
@@ -150,7 +101,7 @@ export class GamesService {
 
     let updated = 0;
     for (const game of gamesWithoutCover) {
-      const cover = await this.getGameCover(game.title);
+      const cover = await this.getGameCover(game.title, game.platform);
       if (cover.url) {
         await this.prisma.game.update({
           where: { id: game.id },
@@ -173,7 +124,7 @@ export class GamesService {
       let coverUrl = item.coverUrl;
       if (!coverUrl) {
         try {
-          const cover = await this.getGameCover(item.title);
+          const cover = await this.getGameCover(item.title, item.platform);
           coverUrl = cover.url ?? null;
         } catch {
           coverUrl = null;
