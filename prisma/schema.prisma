@@ -7,13 +7,26 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum GameStatus {
+  BACKLOG
+  PLAYING
+  COMPLETED
+  ABANDONED
+  WISHLIST
+}
+
 model Game {
-  id        Int      @id @default(autoincrement())
-  title     String
-  platform  String
-  coverUrl  String?  @map("cover_url")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at") // Optional: Good for auditing
+  id          Int        @id @default(autoincrement())
+  title       String
+  platform    String
+  coverUrl    String?    @map("cover_url")
+  status      GameStatus @default(BACKLOG)
+  rating      Int?
+  isFavorite  Boolean    @default(false) @map("is_favorite")
+  hoursPlayed Int?       @default(0) @map("hours_played")
+  notes       String?
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at") // Optional: Good for auditing
 
   @@map("games") // Keeps the table name as 'games' in the database
 }
