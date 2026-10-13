@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
 
 export class CreateGameDto {
   @IsString()
@@ -8,4 +8,8 @@ export class CreateGameDto {
   @IsString()
   @IsNotEmpty()
   platform: string;
+
+  @IsString()
+  @IsOptional()
+  coverUrl?: string | null;
 }

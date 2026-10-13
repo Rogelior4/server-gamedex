@@ -8,14 +8,27 @@ import axios from 'axios';
 export class GamesService {
   constructor(private prisma: PrismaService) {}
 
-  create(createGameDto: CreateGameDto) {
+  async create(createGameDto: CreateGameDto) {
+    let coverUrl = createGameDto.coverUrl;
+
+    // Si no se proporcionó una URL manual, la buscamos automáticamente en Steam
+    if (!coverUrl) {
+      const cover = await this.getGameCover(createGameDto.title);
+      coverUrl = cover.url ?? undefined;
+    }
+
     return this.prisma.game.create({
-      data: createGameDto,
+      data: {
+        ...createGameDto,
+        coverUrl: coverUrl ?? null,
+      },
     });
   }
 
   findAll() {
-    return this.prisma.game.findMany();
+    return this.prisma.game.findMany({
+      orderBy: { id: 'desc' },
+    });
   }
 
   async findOne(id: number) {
@@ -70,10 +83,21 @@ export class GamesService {
   }
 
   async update(id: number, updateGameDto: UpdateGameDto) {
-    await this.findOne(id);
+    const existing = await this.findOne(id);
+    let coverUrl: string | null | undefined = updateGameDto.coverUrl;
+
+    // Si el título cambió y no se pasó una portada específica, re-buscamos la carátula
+    if (updateGameDto.title && updateGameDto.title !== existing.title && coverUrl === undefined) {
+      const cover = await this.getGameCover(updateGameDto.title);
+      coverUrl = cover.url ?? null;
+    }
+
     return this.prisma.game.update({
       where: { id },
-      data: updateGameDto,
+      data: {
+        ...updateGameDto,
+        ...(coverUrl !== undefined ? { coverUrl } : {}),
+      },
     });
   }
 
@@ -82,5 +106,27 @@ export class GamesService {
     return this.prisma.game.delete({
       where: { id },
     });
+  }
+
+  async syncMissingCovers() {
+    const gamesWithoutCover = await this.prisma.game.findMany({
+      where: {
+        coverUrl: null,
+      },
+    });
+
+    let updated = 0;
+    for (const game of gamesWithoutCover) {
+      const cover = await this.getGameCover(game.title);
+      if (cover.url) {
+        await this.prisma.game.update({
+          where: { id: game.id },
+          data: { coverUrl: cover.url },
+        });
+        updated++;
+      }
+    }
+
+    return { total: gamesWithoutCover.length, updated };
   }
 }
