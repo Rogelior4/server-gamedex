@@ -82,6 +82,39 @@ export class GamesService {
     }
   }
 
+  async searchSteam(query: string) {
+    if (!query || query.trim().length === 0) {
+      return [];
+    }
+
+    try {
+      const response = await axios.get(
+        `https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(query.trim())}&l=english&cc=US`,
+        { timeout: 5000 },
+      );
+
+      if (!response.data.items || !Array.isArray(response.data.items)) {
+        return [];
+      }
+
+      return response.data.items.slice(0, 8).map((item: any) => {
+        const appId = item.id;
+        const libraryCoverUrl = `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/library_600x900.jpg`;
+        const headerUrl = `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`;
+        return {
+          id: appId,
+          title: item.name,
+          coverUrl: libraryCoverUrl,
+          headerUrl: headerUrl,
+          tinyImage: item.tiny_image || headerUrl,
+          platforms: item.platforms || {},
+        };
+      });
+    } catch (error) {
+      return [];
+    }
+  }
+
   async update(id: number, updateGameDto: UpdateGameDto) {
     const existing = await this.findOne(id);
     let coverUrl: string | null | undefined = updateGameDto.coverUrl;
