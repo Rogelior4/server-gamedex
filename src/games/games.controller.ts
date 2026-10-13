@@ -26,6 +26,11 @@ export class GamesController {
     return this.gamesService.findAll();
   }
 
+  @Post('sync-covers')
+  syncCovers() {
+    return this.gamesService.syncMissingCovers();
+  }
+
   @Get('cover/:title')
   getGameCover(@Param('title') title: string) {
     // El controlador solo "pasa la pelota" al servicio

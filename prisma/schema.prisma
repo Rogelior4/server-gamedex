@@ -11,6 +11,7 @@ model Game {
   id        Int      @id @default(autoincrement())
   title     String
   platform  String
+  coverUrl  String?  @map("cover_url")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at") // Optional: Good for auditing
 
