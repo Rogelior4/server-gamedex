@@ -162,4 +162,39 @@ export class GamesService {
 
     return { total: gamesWithoutCover.length, updated };
   }
+
+  async bulkImport(items: CreateGameDto[]) {
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return { count: 0, games: [] };
+    }
+
+    const createdGames: any[] = [];
+    for (const item of items) {
+      let coverUrl = item.coverUrl;
+      if (!coverUrl) {
+        try {
+          const cover = await this.getGameCover(item.title);
+          coverUrl = cover.url ?? null;
+        } catch {
+          coverUrl = null;
+        }
+      }
+
+      const created = await this.prisma.game.create({
+        data: {
+          title: item.title,
+          platform: item.platform,
+          coverUrl: coverUrl ?? null,
+          status: item.status ?? 'BACKLOG',
+          rating: item.rating ?? null,
+          isFavorite: item.isFavorite ?? false,
+          hoursPlayed: item.hoursPlayed ?? 0,
+          notes: item.notes ?? null,
+        },
+      });
+      createdGames.push(created);
+    }
+
+    return { count: createdGames.length, games: createdGames };
+  }
 }
