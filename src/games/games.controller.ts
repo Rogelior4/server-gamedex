@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Delete,
+  Query,
   ParseIntPipe, // <--- Importante para validar IDs numéricos
 } from '@nestjs/common';
 import { GamesService } from './games.service';
@@ -29,6 +30,11 @@ export class GamesController {
   @Post('sync-covers')
   syncCovers() {
     return this.gamesService.syncMissingCovers();
+  }
+
+  @Get('search-steam')
+  searchSteam(@Query('term') term: string) {
+    return this.gamesService.searchSteam(term);
   }
 
   @Get('cover/:title')
