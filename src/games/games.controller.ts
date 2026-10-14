@@ -10,11 +10,20 @@ import {
   ParseIntPipe,
 } from '@nestjs/common';
 import { GamesService } from './games.service';
-import { CreateGameDto, UpdateGameDto, ImportGamesDto } from './dto';
+import { SteamAccountService } from './steam-account.service';
+import {
+  CreateGameDto,
+  UpdateGameDto,
+  ImportGamesDto,
+  ImportSteamGamesDto,
+} from './dto';
 
 @Controller('games')
 export class GamesController {
-  constructor(private readonly gamesService: GamesService) {}
+  constructor(
+    private readonly gamesService: GamesService,
+    private readonly steamAccountService: SteamAccountService,
+  ) {}
 
   @Post()
   create(@Body() createGameDto: CreateGameDto) {
@@ -34,6 +43,36 @@ export class GamesController {
   @Post('sync-covers')
   syncCovers() {
     return this.gamesService.syncMissingCovers();
+  }
+
+  /**
+   * Resuelve el perfil público de Steam a partir del usuario, Vanity URL o SteamID
+   */
+  @Get('steam/profile')
+  resolveSteamProfile(
+    @Query('identifier') identifier: string,
+    @Query('apiKey') apiKey?: string,
+  ) {
+    return this.steamAccountService.resolveUser(identifier, apiKey);
+  }
+
+  /**
+   * Obtiene la lista completa de videojuegos de la cuenta de Steam
+   */
+  @Get('steam/owned-games')
+  getSteamOwnedGames(
+    @Query('steamId') steamId: string,
+    @Query('apiKey') apiKey?: string,
+  ) {
+    return this.steamAccountService.getOwnedGames(steamId, apiKey);
+  }
+
+  /**
+   * Importa juegos de Steam a la base de datos de GameDex
+   */
+  @Post('steam/import')
+  importSteamGames(@Body() importSteamGamesDto: ImportSteamGamesDto) {
+    return this.steamAccountService.importGames(importSteamGamesDto);
   }
 
   /**

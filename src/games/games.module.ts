@@ -10,6 +10,8 @@ import {
   MetadataAggregatorService,
 } from './providers';
 
+import { SteamAccountService } from './steam-account.service';
+
 @Module({
   controllers: [GamesController],
   providers: [
@@ -20,7 +22,8 @@ import {
     RawgProvider,
     MetadataAggregatorService,
     GamesService,
+    SteamAccountService,
   ],
-  exports: [GamesService, MetadataAggregatorService],
+  exports: [GamesService, MetadataAggregatorService, SteamAccountService],
 })
 export class GamesModule {}
